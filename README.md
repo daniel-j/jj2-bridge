@@ -4,5 +4,7 @@ A small program that acts as stdin for a running JJ2 process. You can use it to 
 
 Build dependencies
 ---
-For Arch Linux cross-compile:
+For cross-compiling on Arch Linux:
 ` # pacman -S mingw-w64-gcc`
+
+Run `make` to build.
