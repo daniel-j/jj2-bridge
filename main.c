@@ -16,7 +16,8 @@
 
 #define V123TOV124OFS 0x00023620
 
-const unsigned long GLOBAL_GAME_LOOP_RUNNING = 0x52A522;
+// const unsigned long GLOBAL_GAME_LOOP_RUNNING = 0x52A522;
+#define JAZZ2LOCALPLAYERS 0x5A4D00
 
 unsigned long vOffset = 0;
 bool isTSF = false;
@@ -66,9 +67,9 @@ bool prefix(const char *pre, const char *str) {
 void checkRunning() {
 	char v;
 	gameRunning = false;
-	int addr = vOffset + GLOBAL_GAME_LOOP_RUNNING;
+	unsigned long addr = vOffset + JAZZ2LOCALPLAYERS;
 	ReadProcessMemory(phandle, (LPCVOID)addr, &v, 1, 0);
-	if (v == 1) {
+	if (v > 0) {
 		gameRunning = true;
 	}
 }
@@ -176,14 +177,22 @@ int main (int argc, char *argv[]) {
 	// setlocale(LC_ALL, "");
 	// setlocale(LC_ALL, "en_US.utf8");
 
-	printf("Connecting to JJ2 process...\r\n");
+	printf("BRIDGE: Connecting to JJ2 process...\r\n");
 	fflush(stdout);
 	while (hWnd == 0) {
 		EnumWindows(EnumWindowsProc, (LPARAM)NULL);
 		fflush(stdout);
 		sleep(1);
 	}
-	printf("Connected!\r\n");
+	printf("BRIDGE: Connected, waiting for game to start...\r\n");
+	fflush(stdout);
+
+	do {
+		sleep(1);
+		checkRunning();
+	} while (!gameRunning);
+	sleep(1);
+	printf("BRIDGE: Ready!\r\n");
 	fflush(stdout);
 
 	while (true) {
@@ -197,6 +206,8 @@ int main (int argc, char *argv[]) {
 		}
 		printf("%s\r\n", s);*/
 		if (prefix("/close", (char*)s)) {
+			printf("BRIDGE: Closing JJ2 process...\r\n");
+			fflush(stdout);
 			closeWindow();
 			break;
 		}
