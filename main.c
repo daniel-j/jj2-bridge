@@ -6,7 +6,6 @@
 #include <time.h>
 #include <unistd.h> // for sleep()
 #include <string.h>
-//#include <locale.h>
 
 #define JAZZ2123 0x004cd9f8
 #define JAZZ2124 0x004c9b98
@@ -14,10 +13,15 @@
 #define JAZZ2_VALUE_VERSION123 0x33322E31
 #define JAZZ2_VALUE_VERSION124 0x34322E31
 
-#define V123TOV124OFS 0x00023620
+#define TSF_ADDR_OFFSET 0x00023620
 
-// const unsigned long GLOBAL_GAME_LOOP_RUNNING = 0x52A522;
-#define JAZZ2LOCALPLAYERS 0x5A4D00
+//const unsigned long GLOBAL_GAME_LOOP_RUNNING = 0x52A522;
+//#define JAZZ2LOCALPLAYERS 0x5A4D00
+
+//#define JAZZ2GAMERUNNING 0x33FB08
+//#define JAZZ2GAMERUNNING 0x74A23C
+#define JAZZ2_PLAYER1_ACTIVE 0x5A546C
+#define JAZZ2_LEVELWIDTH 0x514DAC
 
 unsigned long vOffset = 0;
 bool isTSF = false;
@@ -65,11 +69,14 @@ bool prefix(const char *pre, const char *str) {
 }
 
 void checkRunning() {
-	char v;
+	char active;
 	gameRunning = false;
-	unsigned long addr = vOffset + JAZZ2LOCALPLAYERS;
-	ReadProcessMemory(phandle, (LPCVOID)addr, &v, 1, 0);
-	if (v > 0) {
+	unsigned long addr = vOffset + JAZZ2_PLAYER1_ACTIVE;
+	ReadProcessMemory(phandle, (LPCVOID)addr, &active, 1, 0);
+	int width;
+	addr = vOffset + JAZZ2_LEVELWIDTH;
+	ReadProcessMemory(phandle, (LPCVOID)addr, &width, 4, 0);
+	if (active > 0 && width > 0) {
 		gameRunning = true;
 	}
 }
@@ -117,7 +124,7 @@ bool openJJ2(HWND hwnd) {
 
 		ReadProcessMemory(phandle, (LPCVOID)JAZZ2124, (LPVOID)&v, 4, 0);
 		if (v == JAZZ2_VALUE_VERSION124) {
-			vOffset = V123TOV124OFS;
+			vOffset = TSF_ADDR_OFFSET;
 			isTSF = true;
 			printf("BRIDGE: Found JJ2 TSF!\r\n");
 			checkRunning();
@@ -174,24 +181,29 @@ void closeWindow() {
 }
 
 int main (int argc, char *argv[]) {
-	// setlocale(LC_ALL, "");
-	// setlocale(LC_ALL, "en_US.utf8");
 
 	printf("BRIDGE: Connecting to JJ2 process...\r\n");
 	fflush(stdout);
 	while (hWnd == 0) {
 		EnumWindows(EnumWindowsProc, (LPARAM)NULL);
 		fflush(stdout);
-		sleep(1);
+		if (hWnd == 0) {
+			sleep(0.5);
+		}
 	}
-	printf("BRIDGE: Connected, waiting for game to start...\r\n");
+	printf("BRIDGE: Waiting for game to start...\r\n");
 	fflush(stdout);
 
-	do {
-		sleep(1);
+	while (!gameRunning) {
 		checkRunning();
-	} while (!gameRunning);
-	sleep(2);
+		if (!gameRunning) {
+			sleep(0.5);
+		}
+	}
+
+	// delay so you can run commands at startup.
+	sleep(1);
+
 	printf("BRIDGE: Ready!\r\n");
 	fflush(stdout);
 
