@@ -100,7 +100,7 @@ bool openJJ2(HWND hwnd) {
 	//printf("plusOffset: %#08x\r\n", (unsigned int)plusOffset);
 	phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, pid);
 	if (!phandle) {
-		printf("Could not get process handle!\r\n");
+		printf("BRIDGE: Could not get process handle!\r\n");
 		return false;
 	}
 	else {
@@ -110,7 +110,7 @@ bool openJJ2(HWND hwnd) {
 		if (v == JAZZ2_VALUE_VERSION123) {
 			vOffset = 0;
 			isTSF = false;
-			printf("Found JJ2 1.23!\r\n");
+			printf("BRIDGE: Found JJ2 1.23!\r\n");
 			checkRunning();
 			return true;
 		}
@@ -119,7 +119,7 @@ bool openJJ2(HWND hwnd) {
 		if (v == JAZZ2_VALUE_VERSION124) {
 			vOffset = V123TOV124OFS;
 			isTSF = true;
-			printf("Found JJ2 TSF!\r\n");
+			printf("BRIDGE: Found JJ2 TSF!\r\n");
 			checkRunning();
 			return true;
 		}
@@ -191,7 +191,7 @@ int main (int argc, char *argv[]) {
 		sleep(1);
 		checkRunning();
 	} while (!gameRunning);
-	sleep(1);
+	sleep(2);
 	printf("BRIDGE: Ready!\r\n");
 	fflush(stdout);
 
