@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdbool.h>
 #include <windows.h>
@@ -6,6 +5,7 @@
 #include <time.h>
 #include <unistd.h> // for sleep()
 #include <string.h>
+#include <locale.h>
 
 #define JAZZ2123 0x004cd9f8
 #define JAZZ2124 0x004c9b98
@@ -13,22 +13,21 @@
 #define JAZZ2_VALUE_VERSION123 0x33322E31
 #define JAZZ2_VALUE_VERSION124 0x34322E31
 
-#define TSF_ADDR_OFFSET 0x00023620
+#define V123TOV124OFS 0x00023620
 
-//const unsigned long GLOBAL_GAME_LOOP_RUNNING = 0x52A522;
-//#define JAZZ2LOCALPLAYERS 0x5A4D00
+#define JAZZ2_GAME_PORT 0x005f378a
+#define JAZZ2_HWND_V123 0x4F8E1C
+#define JAZZ2_HWND_V124 0x4F33FC
+#define JAZZ2_USRWANTQUIT_V123 0x4f8e80
+#define JAZZ2_USRWANTQUIT_V124 0x4f343f
 
-//#define JAZZ2GAMERUNNING 0x33FB08
-//#define JAZZ2GAMERUNNING 0x74A23C
-#define JAZZ2_PLAYER1_ACTIVE 0x5A546C
-#define JAZZ2_LEVELWIDTH 0x514DAC
-
+short gamePort = 10052;
 unsigned long vOffset = 0;
 bool isTSF = false;
 bool gameRunning = false;
 HWND hWnd = 0;
 DWORD pid = 0;
-DWORD plusOffset = 0;
+HMODULE plusOffset = 0;
 HANDLE phandle = 0;
 
 BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam);
@@ -68,15 +67,12 @@ bool prefix(const char *pre, const char *str) {
 	return strncmp(pre, str, strlen(pre)) == 0;
 }
 
-void checkRunning() {
-	char active;
+void checkRunning(HWND hwnd) {
+	HWND hwndCheck = 0;
 	gameRunning = false;
-	unsigned long addr = vOffset + JAZZ2_PLAYER1_ACTIVE;
-	ReadProcessMemory(phandle, (LPCVOID)addr, &active, 1, 0);
-	int width;
-	addr = vOffset + JAZZ2_LEVELWIDTH;
-	ReadProcessMemory(phandle, (LPCVOID)addr, &width, 4, 0);
-	if (active > 0 && width > 0) {
+	int addr = isTSF ? JAZZ2_HWND_V124 : JAZZ2_HWND_V123;
+	ReadProcessMemory(phandle, (LPCVOID)addr, &hwndCheck, sizeof(HWND), 0);
+	if (hwndCheck == hwnd) {
 		gameRunning = true;
 	}
 }
@@ -103,7 +99,7 @@ HMODULE GetRemoteModuleHandle(unsigned long pId, char *module) {
 bool openJJ2(HWND hwnd) {
 
 	GetWindowThreadProcessId(hwnd, &pid);
-	plusOffset = (DWORD)GetRemoteModuleHandle(pid, "plus.dll");
+	plusOffset = GetRemoteModuleHandle(pid, "plus.dll");
 	//printf("plusOffset: %#08x\r\n", (unsigned int)plusOffset);
 	phandle = OpenProcess(PROCESS_ALL_ACCESS, 0, pid);
 	if (!phandle) {
@@ -118,16 +114,16 @@ bool openJJ2(HWND hwnd) {
 			vOffset = 0;
 			isTSF = false;
 			printf("BRIDGE: Found JJ2 1.23!\r\n");
-			checkRunning();
+			checkRunning(hwnd);
 			return true;
 		}
 
 		ReadProcessMemory(phandle, (LPCVOID)JAZZ2124, (LPVOID)&v, 4, 0);
 		if (v == JAZZ2_VALUE_VERSION124) {
-			vOffset = TSF_ADDR_OFFSET;
+			vOffset = V123TOV124OFS;
 			isTSF = true;
 			printf("BRIDGE: Found JJ2 TSF!\r\n");
-			checkRunning();
+			checkRunning(hwnd);
 			return true;
 		}
 
@@ -157,6 +153,7 @@ BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam) {
 
 void sendChat(const char *message) {
 	if (!phandle) return;
+	if (!gameRunning) return;
 	char s[64];
 	sprintf(s, "\x20%.62s", message);
 	int dataLength = strlen(s);
@@ -181,36 +178,38 @@ void closeWindow() {
 }
 
 int main (int argc, char *argv[]) {
-
-	printf("BRIDGE: Connecting to JJ2 process...\r\n");
+	setlocale(LC_ALL, "");
+	
+	if (argc > 1) {
+		gamePort = atoi(argv[1]);
+	}
+	//sleep(3);
+	printf("BRIDGE: Connecting to JJ2 on port %d\r\n", gamePort);
 	fflush(stdout);
 	while (hWnd == 0) {
 		EnumWindows(EnumWindowsProc, (LPARAM)NULL);
 		fflush(stdout);
-		if (hWnd == 0) {
-			sleep(0.5);
-		}
+		sleep(1);
 	}
-	printf("BRIDGE: Waiting for game to start...\r\n");
-	fflush(stdout);
 
-	while (!gameRunning) {
-		checkRunning();
+	while (!gameRunning && phandle) {
+		checkRunning(hWnd);
 		if (!gameRunning) {
 			sleep(0.5);
 		}
 	}
 
-	// delay so you can run commands at startup.
 	sleep(1);
 
 	printf("BRIDGE: Ready!\r\n");
 	fflush(stdout);
 
-	while (true) {
-		char* s = getline();
-		if (strlen(s) == 0) {
-			continue;
+
+	while (phandle && gameRunning) {
+		unsigned char* s = (unsigned char*)(getline());
+		checkRunning(hWnd);
+		if (!gameRunning) {
+			break;
 		}
 		/*const unsigned char* p = s;
 		for (; *p; ++p) {
@@ -218,14 +217,25 @@ int main (int argc, char *argv[]) {
 		}
 		printf("%s\r\n", s);*/
 		if (prefix("/close", (char*)s)) {
-			printf("BRIDGE: Closing JJ2 process...\r\n");
-			fflush(stdout);
+			printf("BRIDGE: Closing JJ2...\r\n");
+			sendChat("§1|>> Shutting down server");
+			sendChat("/savesettings");
+			sleep(1);
+			bool wantQuit = true;
+			int addr = isTSF ? JAZZ2_USRWANTQUIT_V124 : JAZZ2_USRWANTQUIT_V123;
+			WriteProcessMemory(phandle, (LPVOID)addr, &wantQuit, 1, 0);
+			sleep(1);
+			checkRunning(hWnd);
+			if (!gameRunning) {
+				break;
+			}
 			closeWindow();
 			break;
 		}
 		sendChat((char*)s);
 		fflush(stdout);
 	}
+	printf("BRIDGE: Stopping\r\n");
 	fflush(stdout);
 
 	return 0;
