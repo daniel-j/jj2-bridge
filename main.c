@@ -218,7 +218,7 @@ int main (int argc, char *argv[]) {
 		printf("%s\r\n", s);*/
 		if (prefix("/close", (char*)s)) {
 			printf("BRIDGE: Closing JJ2...\r\n");
-			sendChat("ยง1|>> Shutting down server");
+			sendChat("ง1|>> Shutting down server");
 			sendChat("/savesettings");
 			sleep(1);
 			bool wantQuit = true;
